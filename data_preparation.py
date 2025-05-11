@@ -45,11 +45,7 @@ def download_and_extract():
         print("Dataset already extracted.")
 
 
-# ---------- Step 2: Load .tsv ----------
-# def read_tsv(split="train"):
-#     path = os.path.join(DATASET_DIR, LANG_CODE, "lexicons", f"{LANG_CODE}.translit.sampled.{split}.tsv")
-#     df = pd.read_csv(path, sep="\t", header=None, names=["roman", "devanagari"])
-#     return df
+# ---------- Step 2: Load .tsv ----------   
 
 def read_tsv(split="train"):
     path = os.path.join(DATASET_DIR, LANG_CODE, "lexicons", f"{LANG_CODE}.translit.sampled.{split}.tsv")
@@ -122,7 +118,6 @@ def process_dataset(df, input_char2idx, output_char2idx):
 
 # ---------- Step 5: Load all ----------
 def load_data():
-    download_and_extract()
 
     train_df = read_tsv("train")
     dev_df = read_tsv("dev")
@@ -158,6 +153,7 @@ def load_data():
     }
 
 if __name__ == "__main__":
+    download_and_extract()
     data = load_data()
     print("Data loaded successfully.")
     print(f"Input vocab size: {len(data['input_char2idx'])}")
