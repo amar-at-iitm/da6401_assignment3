@@ -33,7 +33,7 @@
 
 ### Project Structure  
 
-```
+```structure
 .
 
 ├── data/
