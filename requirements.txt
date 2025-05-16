@@ -1,0 +1,8 @@
+# requirements.txt
+pytorch
+wandb
+numpy
+pandas
+matplotlib
+tqdm
+python-dotenv
