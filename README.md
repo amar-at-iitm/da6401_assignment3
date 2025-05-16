@@ -51,6 +51,9 @@
 |
 ├── predictions_vanilla/
 ├── predictions_attention/
+├── best_model.pt
+├── best_model.py
+├── local_functions.py
 ├── train_vanilla.py
 ├── test_vanilla.py
 ├── sweep_config.py                  # Sweep configuration file
