@@ -61,12 +61,13 @@ def load_data():
     if os.path.exists(VOCAB_INPUT_PATH):
         input_char2idx, input_idx2char = load_vocab(VOCAB_INPUT_PATH)
     else:
-        input_char2idx, input_idx2char = build_vocab(train_df["roman"])
+        input_char2idx, input_idx2char = build_vocab(train_df["roman"], special_tokens=SPECIAL_TOKENS)
         save_vocab(input_char2idx, VOCAB_INPUT_PATH)
 
     # Output vocab
     if os.path.exists(VOCAB_OUTPUT_PATH):
         output_char2idx, output_idx2char = load_vocab(VOCAB_OUTPUT_PATH)
+        
     else:
         output_char2idx, output_idx2char = build_vocab(train_df["devanagari"], special_tokens=SPECIAL_TOKENS)
         save_vocab(output_char2idx, VOCAB_OUTPUT_PATH)

@@ -73,10 +73,13 @@ def process_dataset(df, input_char2idx, output_char2idx):
 def idx_to_string(indices, idx2char):
     chars = []
     for idx in indices:
-        char = idx2char.get(idx, "")  
-        chars.append(char)
+        idx = idx.item() if isinstance(idx, torch.Tensor) else idx
+        char = idx2char[idx]
+        if char == SPECIAL_TOKENS["EOS"]:
+            break
+        if char not in [SPECIAL_TOKENS["PAD"], SPECIAL_TOKENS["SOS"]]:
+            chars.append(char)
     return "".join(chars)
-
 
 #/////////////////////////////////////////////////////////////////////
 def save_best_model_config(config, model_path="best_model.pt", output_path="best_model.py"):
