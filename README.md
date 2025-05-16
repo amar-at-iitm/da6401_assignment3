@@ -38,12 +38,22 @@
 
 ├── data/
 │   ├── dakshina_dataset_v1.0.zip
+|   ├── vocab_input.json
+|   ├── vocab_output.json
 |   ├── dakshina_dataset_v1.0/      # Original dataset
 |        └── hi/
 |            └── lexicons/
-|       
+|
+├── models/
+│   ├── encoder.py
+│   ├── decoder.py
+│   ├── seq2seq.py    
+|
 ├── predictions_vanilla/
 ├── predictions_attention/
+├── train_vanilla.py
+├── test_vanilla.py
+├── sweep_config.py                  # Sweep configuration file
 ├── data_preparation.py              # Handles downloading, loading, vocab, padding
 ├── requirements.txt                 # List of Python dependencies
 └── README.md                        # Root README with project overview
