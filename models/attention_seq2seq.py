@@ -1,19 +1,17 @@
-# models/seq2seq.py
+# models/attention_seq2seq.py
 import torch
 import torch.nn as nn
 
 class Seq2Seq(nn.Module):
     def __init__(self, encoder, decoder, device, sos_token_id=None, eos_token_id=None):
-        super().__init__()
+        super(Seq2Seq, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.device = device
         self.sos_token_id = sos_token_id
         self.eos_token_id = eos_token_id
-
-        assert encoder.cell_type == decoder.cell_type, "Encoder and Decoder must use the same RNN type"
         self.rnn_type = encoder.cell_type
-
+        
     def _adjust_hidden(self, hidden):
         def pad_or_trim(h, target_layers):
             if h.size(0) == target_layers:
@@ -34,26 +32,36 @@ class Seq2Seq(nn.Module):
             h_n = pad_or_trim(h_n, self.decoder.rnn.num_layers)
             return h_n
 
-    def forward(self, src, trg, teacher_forcing_ratio=0.5):
+    def forward(self, src, trg=None, teacher_forcing_ratio=0.5):
         batch_size = src.size(0)
         trg_len = trg.size(1)
-        output_dim = self.decoder.fc_out.out_features
+        output_dim = self.decoder.output_dim
 
+        # Store outputs and attention weights
         outputs = torch.zeros(batch_size, trg_len, output_dim).to(self.device)
+        attentions = torch.zeros(batch_size, trg_len, src.size(1)).to(self.device)
 
-        hidden = self.encoder(src)
+        # Encode input
+        encoder_outputs, hidden = self.encoder(src)
         hidden = self._adjust_hidden(hidden)
+      
 
-        input_token = trg[:, 0]  # <sos>
+        # Prepare initial decoder input (SOS tokens)
+        input_token = torch.full((batch_size,), self.sos_token_id, dtype=torch.long, device=self.device)
 
-        for t in range(1, trg_len):
-            output, hidden = self.decoder(input_token, hidden)
+        for t in range(trg_len):
+            output, hidden, attn_weights = self.decoder(input_token, hidden, encoder_outputs)
+
             outputs[:, t] = output
+            attentions[:, t] = attn_weights  # [batch, src_len]
 
-            top1 = output.argmax(1)
-            input_token = trg[:, t] if torch.rand(1).item() < teacher_forcing_ratio else top1
+            # Choose next input
+            if trg is not None and torch.rand(1).item() < teacher_forcing_ratio:
+                input_token = trg[:, t]
+            else:
+                input_token = output.argmax(1)
 
-        return outputs
+        return outputs, attentions  # Return both predictions and attention matrix
 
     def predict(self, src, max_len=50, beam_size=1):
         self.eval()
@@ -133,4 +141,4 @@ class Seq2Seq(nn.Module):
                     break
 
             best_sequence = sequences[0][0]
-            return best_sequence[1:]  
+            return best_sequence[1:] 
