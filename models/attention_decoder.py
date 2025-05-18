@@ -16,7 +16,7 @@ class AttentionDecoder(nn.Module):
         self.embedding = nn.Embedding(output_dim, emb_dim)
         rnn_cls = {'rnn': nn.RNN, 'lstm': nn.LSTM, 'gru': nn.GRU}[cell_type.lower()]
         self.rnn = rnn_cls(emb_dim + hidden_dim, hidden_dim, n_layers, batch_first=True, dropout=dropout if n_layers > 1 else 0)
-        self.attention = Attention(hidden_dim)
+        self.attention = attention
         self.fc_out = nn.Linear(hidden_dim * 2, output_dim)
         self.dropout = nn.Dropout(dropout)
 

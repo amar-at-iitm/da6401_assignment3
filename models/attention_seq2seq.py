@@ -70,75 +70,85 @@ class Seq2Seq(nn.Module):
                 return [self.beam_search_decode(src[i:i+1], beam_size=beam_size, max_len=max_len) for i in range(src.size(0))]
             else:
                 batch_size = src.size(0)
-                hidden = self.encoder(src)
+                encoder_outputs, hidden = self.encoder(src)
                 hidden = self._adjust_hidden(hidden)
 
                 input_token = torch.full((batch_size,), self.sos_token_id, dtype=torch.long, device=src.device)
                 outputs = []
+                all_attn_weights = []
 
                 for _ in range(max_len):
-                    output, hidden = self.decoder(input_token, hidden)
+                    output, hidden, attn_weights = self.decoder(input_token, hidden, encoder_outputs)
                     top1 = output.argmax(1)
                     outputs.append(top1)
+                    all_attn_weights.append(attn_weights)
                     input_token = top1
-
                     if (top1 == self.eos_token_id).all():
                         break
 
-                outputs = torch.stack(outputs, dim=1)
-                return outputs.tolist()
+                outputs = torch.stack(outputs, dim=1)  # (batch, seq_len)
+                attn_matrix = torch.stack(all_attn_weights, dim=1)  # (batch, seq_len, src_len)
+                return outputs.tolist(), attn_matrix, encoder_outputs
+
 
     def greedy_decode(self, src, max_len=30):
         self.eval()
         with torch.no_grad():
-            hidden = self.encoder(src)
+            encoder_outputs, hidden = self.encoder(src)
             hidden = self._adjust_hidden(hidden)
 
             input_token = torch.tensor([self.sos_token_id]).to(self.device)
             output_tokens = []
+            attn_weights_all = []
 
             for _ in range(max_len):
-                output, hidden = self.decoder(input_token, hidden)
+                output, hidden, attn_weights = self.decoder(input_token, hidden, encoder_outputs)
                 top1 = output.argmax(1)
                 if top1.item() == self.eos_token_id:
                     break
                 output_tokens.append(top1.item())
+                attn_weights_all.append(attn_weights.squeeze(0))  # (src_len,)
                 input_token = top1
 
-        return output_tokens
+        return output_tokens, torch.stack(attn_weights_all, dim=0), encoder_outputs
+
 
     def beam_search_decode(self, src, beam_size=3, max_len=30):
         self.eval()
         with torch.no_grad():
-            hidden = self.encoder(src)
+            encoder_outputs, hidden = self.encoder(src)
             hidden = self._adjust_hidden(hidden)
 
             assert src.size(0) == 1, "Beam search supports batch size 1 only"
 
             sequences = [[
-                [self.sos_token_id], 0.0, hidden
-            ]]
+                [self.sos_token_id], 0.0, hidden, []
+            ]]  # [tokens, score, hidden_state, attention_seq]
 
             for _ in range(max_len):
                 all_candidates = []
-                for seq, score, h in sequences:
+                for seq, score, h, attn_seq in sequences:
                     input_token = torch.tensor([seq[-1]]).to(self.device)
-                    output, new_hidden = self.decoder(input_token, h)
+                    output, new_hidden, attn_weights = self.decoder(input_token, h, encoder_outputs)
                     log_probs = torch.log_softmax(output, dim=1).squeeze(0)
-
                     topk = torch.topk(log_probs, beam_size)
 
                     for i in range(beam_size):
                         token = topk.indices[i].item()
                         prob = topk.values[i].item()
-                        candidate = [seq + [token], score + prob, new_hidden]
+                        candidate = [
+                            seq + [token],
+                            score + prob,
+                            new_hidden,
+                            attn_seq + [attn_weights.squeeze(0)]  # (src_len,)
+                        ]
                         all_candidates.append(candidate)
 
-                ordered = sorted(all_candidates, key=lambda x: x[1], reverse=True)
-                sequences = ordered[:beam_size]
+                sequences = sorted(all_candidates, key=lambda x: x[1], reverse=True)[:beam_size]
 
                 if all(seq[0][-1] == self.eos_token_id for seq in sequences):
                     break
 
-            best_sequence = sequences[0][0]
-            return best_sequence[1:] 
+            best_seq, _, _, best_attn_seq = sequences[0]
+            attn_matrix = torch.stack(best_attn_seq, dim=0)  # (seq_len, src_len)
+            return best_seq[1:], attn_matrix, encoder_outputs
