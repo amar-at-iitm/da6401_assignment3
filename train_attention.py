@@ -82,18 +82,20 @@ def train(config=None):
 
         no_improve = 0
         patience = config.get("patience", 3)
+        
 
         for epoch in range(config.epochs):
             model.train()
             epoch_loss = 0
             correct_preds = 0
             total_tokens = 0
-
+            teacher_forcing_ratio = max(0.1, config.teacher_forcing_ratio * (1 - epoch / config.epochs))
+            
             for batch_x, batch_y in tqdm(train_loader, desc=f"Epoch {epoch + 1}", ncols=100, colour="cyan"):
                 optimizer.zero_grad()
 
                 # Forward pass with attention
-                output, attentions = model(batch_x, batch_y, teacher_forcing_ratio=config.get("teacher_forcing_ratio", 0.5))
+                output, attentions = model(batch_x, batch_y, teacher_forcing_ratio=teacher_forcing_ratio)
 
                 output_dim = output.shape[-1]
                 output_flat = output[:, 1:].reshape(-1, output_dim)
@@ -107,24 +109,45 @@ def train(config=None):
                 loss += 0.01 * attn_entropy
 
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                 optimizer.step()
 
                 epoch_loss += loss.item()
                 with torch.no_grad():
-                    correct_preds += ((output.argmax(2)[:, 1:] == batch_y[:, 1:]) & (batch_y[:, 1:] != pad_idx)).sum().item()
-                    total_tokens += (batch_y[:, 1:] != pad_idx).sum().item()
+                    preds = output.argmax(2)[:, 1:]
+                    targets = batch_y[:, 1:]
+                    mask = targets != pad_idx
+
+                    correct_preds += (preds[mask] == targets[mask]).sum().item()
+                    total_tokens += mask.sum().item()
 
             train_acc = correct_preds / total_tokens if total_tokens > 0 else 0.0
 
             # Evaluate on validation set as usual
             model.eval()
+            # with torch.no_grad():
+            #     val_output, _ = model(x_val, y_val, teacher_forcing_ratio=0.0)
+            #     val_loss = criterion(
+            #         val_output[:, 1:].reshape(-1, output_dim),
+            #         y_val[:, 1:].reshape(-1)
+            #     )
+            #     val_acc = calculate_accuracy(val_output[:, 1:], y_val[:, 1:], pad_idx)
             with torch.no_grad():
+                # Get model predictions without teacher forcing
                 val_output, _ = model(x_val, y_val, teacher_forcing_ratio=0.0)
-                val_loss = criterion(
-                    val_output[:, 1:].reshape(-1, output_dim),
-                    y_val[:, 1:].reshape(-1)
-                )
-                val_acc = calculate_accuracy(val_output[:, 1:], y_val[:, 1:], pad_idx)
+
+                val_pred_flat = val_output[:, 1:].reshape(-1, output_dim)  # [batch * (seq_len - 1), output_dim]
+                val_target_flat = y_val[:, 1:].reshape(-1)                 # [batch * (seq_len - 1)]
+
+                val_loss = criterion(val_pred_flat, val_target_flat)
+
+                preds = val_output.argmax(2)[:, 1:]  # [batch, seq_len - 1]
+                targets = y_val[:, 1:]               # [batch, seq_len - 1]
+                mask = targets != pad_idx
+
+                correct_preds = (preds[mask] == targets[mask]).sum().item()
+                total_tokens = mask.sum().item()
+                val_acc = correct_preds / total_tokens if total_tokens > 0 else 0.0
 
             # Log to wandb or print
             wandb.log({
@@ -158,6 +181,6 @@ def train(config=None):
 if __name__ == "__main__":
     import sweep_config
     sweep_id = wandb.sweep(sweep_config.sweep_config_attention, project="DA6401_assign_3")
-    wandb.agent(sweep_id, function=train, count=30)
+    wandb.agent(sweep_id, function=train, count=1)
     wandb.finish()
     print("Sweep complete.")
