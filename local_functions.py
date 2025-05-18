@@ -94,6 +94,17 @@ def save_best_model_config(config, model_path="best_model.pt", output_path="best
         f.write(f"BEAM_SIZE = {getattr(config, 'beam_size', 1)}\n")
         f.write(f"MODEL_PATH = \"{model_path}\"\n")
 
+def save_best_model_attention_config(config, model_path="best_model_attention.pt", output_path="best_model_attention.py"):
+    with open(output_path, "w") as f:
+        f.write("# best_model_attention.py\n\n")
+        f.write(f"EMBEDDING_DIM = {config.embedding_dim}\n")
+        f.write(f"HIDDEN_DIM = {config.hidden_dim}\n")
+        f.write(f"ENCODER_LAYERS = {config.encoder_layers}\n")
+        f.write(f"DECODER_LAYERS = {config.decoder_layers}\n")
+        f.write(f"RNN_TYPE = \"{config.rnn_type}\"\n")
+        f.write(f"DROPOUT = {config.dropout}\n")
+        f.write(f"BEAM_SIZE = {getattr(config, 'beam_size', 1)}\n")
+        f.write(f"MODEL_PATH = \"{model_path}\"\n")
 
 #//////////////////////////////////////////////////////////////
 def calculate_accuracy(preds, targets, pad_idx):
