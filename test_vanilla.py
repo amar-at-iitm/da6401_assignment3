@@ -1,15 +1,7 @@
 # test_vanilla.py
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
-from torch.utils.data import TensorDataset, DataLoader
-from tqdm import tqdm
-from collections import defaultdict
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
-
 from data_preparation import load_data
 from local_functions import idx_to_string, SPECIAL_TOKENS
 from models.encoder import Encoder
@@ -27,7 +19,10 @@ BEST_CONFIG = {
     "dropout": DROPOUT,
     "rnn_type": RNN_TYPE, 
 }
-
+def clean_string(s):
+    for tok in SPECIAL_TOKENS.values():
+        s = s.replace(tok, "")
+    return s
 def load_best_model():
     data = load_data()
     input_dim = len(data["input_char2idx"])
@@ -65,108 +60,66 @@ def test_model():
 
     input_vocab = data["input_idx2char"]
     output_vocab = data["output_idx2char"]
-    pad_idx = data["output_char2idx"][SPECIAL_TOKENS["PAD"]]
-
-    test_loader = DataLoader(TensorDataset(x_test, y_test), batch_size=64)
-
-    all_predictions = []
-    total_correct_exact = 0
-    total_exact_total = 0
-    total_correct_chars = 0
-    total_char_total = 0
-
-    # Confusion matrix tracking
-    confusion_counts_char = defaultdict(lambda: defaultdict(int))
-    confusion_counts_seq = {"correct": 0, "incorrect": 0}
-    all_chars = set(output_vocab.values())
-
-    os.makedirs("predictions_vanilla", exist_ok=True)
-    output_file = open("predictions_vanilla/all_predictions.tsv", "w", encoding="utf-8")
-    output_file.write("Input\tTarget\tPrediction\n")
 
     with torch.no_grad():
-        for batch_id, (src, trg) in enumerate(tqdm(test_loader, desc="Testing")):
-            src, trg = src.to(DEVICE), trg.to(DEVICE)
-            output = model(src, trg=trg, teacher_forcing_ratio=0.0)
-            pred_tokens = output.argmax(2)
-            batch_size = src.size(0)
+        val_output = model(x_test, y_test, teacher_forcing_ratio=0.0)
 
-            for i in range(batch_size):
-                input_str = idx_to_string(src[i], input_vocab)
-                target_str_raw = idx_to_string(trg[i], output_vocab)
-                pred_str_raw = idx_to_string(pred_tokens[i], output_vocab)
+        val_pred_flat = val_output[:, 1:].reshape(-1, val_output.size(-1))  # [batch * (seq_len - 1), output_dim]
+        val_target_flat = y_test[:, 1:].reshape(-1)                         # [batch * (seq_len - 1)]
 
-                target_str = target_str_raw.replace(SPECIAL_TOKENS["SOS"], "").replace(SPECIAL_TOKENS["EOS"], "").replace(SPECIAL_TOKENS["PAD"], "")
-                pred_str = pred_str_raw.replace(SPECIAL_TOKENS["SOS"], "").replace(SPECIAL_TOKENS["EOS"], "").replace(SPECIAL_TOKENS["PAD"], "")
+        pad_idx = data["output_char2idx"][SPECIAL_TOKENS["PAD"]]
+        mask = val_target_flat != pad_idx
+        sos_idx = data["output_char2idx"][SPECIAL_TOKENS["SOS"]]
 
-                all_predictions.append((input_str, target_str, pred_str))
-                output_file.write(f"{input_str}\t{target_str}\t{pred_str}\n")
+        correct_preds = (val_pred_flat.argmax(1)[mask] == val_target_flat[mask]).sum().item()
+        total_tokens = mask.sum().item()
+        val_acc = correct_preds / total_tokens if total_tokens > 0 else 0.0
+ 
+        print(f"Character-Level Test Accuracy: {val_acc:.4f}")
 
-                # Sequence-level accuracy
-                if pred_str == target_str:
-                    total_correct_exact += 1
-                    confusion_counts_seq["correct"] += 1
-                else:
-                    confusion_counts_seq["incorrect"] += 1
-                total_exact_total += 1
+        # Character-wise Accuracy
+        os.makedirs("predictions_vanilla", exist_ok=True)
+        predictions_path = "predictions_vanilla/character_predictions.tsv"
+        with open(predictions_path, "w", encoding="utf-8") as f_out:
+            f_out.write("Input\tTarget\tPredicted\n")
+            preds = val_output.argmax(2)  # shape: [batch, seq_len]
+            for i in range(x_test.size(0)):
+                input_str = idx_to_string(x_test[i], input_vocab)
+                target_str = clean_string(idx_to_string(y_test[i], output_vocab))
+                pred_str = clean_string(idx_to_string(preds[i], output_vocab))
+                f_out.write(f"{input_str}\t{target_str}\t{pred_str}\n")
 
-                # Character-level confusion
-                for p_char, t_char in zip(pred_str, target_str):
-                    if p_char == t_char:
-                        total_correct_chars += 1
-                    confusion_counts_char[t_char][p_char] += 1
-                total_char_total += len(target_str)
+        print(f"Saved character-wise predictions to: {predictions_path}")
+    # Exact Match Accuracy 
+    exact_matches = 0
+    all_outputs = []
+    for i in range(x_test.size(0)):
+        pred_str = clean_string(idx_to_string(preds[i], output_vocab))
+        target_str = clean_string(idx_to_string(y_test[i], output_vocab))
+        input_str = idx_to_string(x_test[i], input_vocab)
 
-    output_file.close()
+        if pred_str == target_str:
+            exact_matches += 1
 
-    # Final accuracy
-    exact_accuracy = total_correct_exact / total_exact_total if total_exact_total > 0 else 0.0
-    char_accuracy = total_correct_chars / total_char_total if total_char_total > 0 else 0.0
+        all_outputs.append((input_str, target_str, pred_str))
 
-    print(f"\nExact Match Accuracy:     {exact_accuracy:.4f} (full-sequence match)")
-    print(f"Character-Level Accuracy: {char_accuracy:.4f} (token-wise match)\n")
+    exact_accuracy_raw = exact_matches / x_test.size(0)
 
-    # Show sample predictions
-    print("Sample Predictions:\n" + "-" * 50)
-    for i in range(min(10, len(all_predictions))):
-        print(f"Input    : {all_predictions[i][0]}")
-        print(f"Target   : {all_predictions[i][1]}")
-        print(f"Predicted: {all_predictions[i][2]}")
-        print("-" * 50)
+    # Save predictions to file
+    os.makedirs("predictions_vanilla", exist_ok=True)
+    with open("predictions_vanilla/predictions.tsv", "w", encoding="utf-8") as f:
+        f.write("Input\tTarget\tPredicted\n")
+        for inp, tgt, pred in all_outputs:
+            f.write(f"{inp}\t{tgt}\t{pred}\n")
 
-    # Character-level confusion matrix
-    sorted_chars = sorted(list(all_chars))
-    matrix = np.zeros((len(sorted_chars), len(sorted_chars)), dtype=int)
-    char_to_idx = {c: i for i, c in enumerate(sorted_chars)}
-    for true_char, preds in confusion_counts_char.items():
-        for pred_char, count in preds.items():
-            i = char_to_idx[true_char]
-            j = char_to_idx[pred_char]
-            matrix[i][j] = count
+    # Save accuracy
+    with open("predictions_vanilla/accuracy.txt", "w") as f:
+        f.write(f"Character-Level Accuracy: {val_acc:.4f}\n")
+        f.write(f"Exact Match Accuracy : {exact_accuracy_raw:.4f}\n")
 
-    df_cm_char = pd.DataFrame(matrix, index=sorted_chars, columns=sorted_chars)
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(df_cm_char, cmap="YlGnBu", annot=False, fmt="d")
-    plt.title("Character-Level Confusion Matrix")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.tight_layout()
-    plt.savefig("predictions_vanilla/char_confusion_matrix.png")
-    plt.close()
-    print("Character confusion matrix saved to predictions_vanilla/char_confusion_matrix.png")
-
-    # Sequence-level confusion matrix (bar plot)
-    labels = ["Correct", "Incorrect"]
-    values = [confusion_counts_seq["correct"], confusion_counts_seq["incorrect"]]
-    plt.figure(figsize=(6, 5))
-    sns.barplot(x=labels, y=values, palette="Set2")
-    plt.title("Sequence-Level (Exact Match) Confusion")
-    plt.ylabel("Number of Sequences")
-    plt.tight_layout()
-    plt.savefig("predictions_vanilla/sequence_confusion.png")
-    plt.close()
-    print("Sequence-level confusion matrix saved to predictions_vanilla/sequence_confusion.png")
-
+    # Print results
+    print(f"Total Words in Test: {x_test.size(0)}")
+    print(f"Exact Match Accuracy:     {exact_accuracy_raw:.4f}")
 
 if __name__ == "__main__":
     test_model()
