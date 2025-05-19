@@ -15,8 +15,8 @@
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/amar-at-iitm/da6401_assignment2
-   cd da6401_assignment2
+   git clone https://github.com/amar-at-iitm/da6401_assignment3
+   cd da6401_assignment3
    ```
 
 2. Install required dependencies:
@@ -47,16 +47,24 @@
 ├── models/
 │   ├── encoder.py
 │   ├── decoder.py
-│   ├── seq2seq.py    
+│   ├── seq2seq.py  
+│   ├── attention_encoder.py
+│   ├── attention_decoder.py
+│   ├── attention_seq2seq.py 
+│   ├── attention.py  
 |
 ├── predictions_vanilla/
 ├── predictions_attention/
 ├── best_model.pt
 ├── best_model.py
+├── best_model_attention.pt
+├── best_model_attention.py
 ├── local_functions.py
 ├── train_vanilla.py
 ├── test_vanilla.py
-├── sweep_config.py                  # Sweep configuration file
+├── train_attention.py
+├── test_attention.py
+├── sweep_config.py                  # Sweep configuration file(vanilla and attention)
 ├── data_preparation.py              # Handles downloading, loading, vocab, padding
 ├── requirements.txt                 # List of Python dependencies
 └── README.md                        # Root README with project overview
