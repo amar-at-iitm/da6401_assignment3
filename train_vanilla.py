@@ -71,30 +71,26 @@ def train(config=None):
             dropout=config.dropout
         ).to(DEVICE)
 
-
         model = Seq2Seq(encoder, decoder, DEVICE,sos_token_id=sos_idx,eos_token_id=eos_idx).to(DEVICE)
 
         optimizer = optim.Adam(model.parameters())
         criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
-        wandb.watch(model, log="gradients", log_freq=100)
 
-        #best_val_loss = float("inf")
         no_improve = 0
-        patience = config.get("patience", 3)  # Optional config param
-        
+        patience = config.get("patience", 3)  
 
+        # Training loop     
         for epoch in range(config.epochs):
             model.train()
             epoch_loss = 0
             correct_preds = 0
             total_tokens = 0
+            teacher_forcing_ratio = max(0.1, config.teacher_forcing_ratio * (1 - epoch / config.epochs))
 
             for batch_x, batch_y in tqdm(train_loader, desc=f"Epoch {epoch + 1}", ncols=100, colour="magenta"):
                 optimizer.zero_grad()
-                #output = model(batch_x, batch_y)
-                output = model(batch_x, batch_y, teacher_forcing_ratio=config.get("teacher_forcing_ratio", 0.5))
-
+                output = model(batch_x, batch_y, teacher_forcing_ratio=teacher_forcing_ratio)
 
                 output_dim = output.shape[-1]
                 output_flat = output[:, 1:].reshape(-1, output_dim)
@@ -132,7 +128,7 @@ def train(config=None):
 
             print(f" Train Loss: {epoch_loss/len(train_loader):.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss.item():.4f} | Val Acc: {val_acc:.4f}")
 
-            # inside the training loop
+            # Early stopping and model saving
             global_best_path = "best_accuracy.txt"
             current_best = load_global_best(global_best_path)
 
