@@ -1,0 +1,56 @@
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : idle
+Target  : आइडल
+Predicted: आइडल
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
+Input   : chhavi
+Target  : छवी
+Predicted: छवी
+
+Input   : jad
+Target  : जड़
+Predicted: जड़
+
+Input   : nana
+Target  : नना
+Predicted: नना
+
+Input   : nanaa
+Target  : नना
+Predicted: नना
+
+Input   : nna
+Target  : नना
+Predicted: नना
+
+Input   : iso
+Target  : आइसो
+Predicted: आइसो
+
