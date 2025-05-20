@@ -6,7 +6,6 @@ sweep_config = {
     'metric': {'name': 'val_acc', 'goal': 'maximize'},
     'name': 'vanilla-training',
     'description': 'Hyperparameter tuning for Seq2Seq model without attention',
-    'program': 'train_vanilla.py',
     'parameters': {
         'embedding_dim': {"values": [16, 32, 64, 128, 256]},
         'hidden_dim': {'values': [32, 64, 128, 256]},
