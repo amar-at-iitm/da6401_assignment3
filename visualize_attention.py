@@ -1,9 +1,10 @@
-
+# visualize_attention.py
 import torch
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from test_attention import load_best_model
+from local_functions import SPECIAL_TOKENS
 import matplotlib.image as mpimg
 from torch.utils.data import TensorDataset, DataLoader
 from IPython.display import display, HTML
@@ -29,13 +30,13 @@ x_test, y_test = data["x_test"].to(DEVICE), data["y_test"].to(DEVICE)
 test_loader = DataLoader(TensorDataset(x_test, y_test), batch_size=64)
 input_vocab = data["input_idx2char"]
 output_vocab = data["output_idx2char"]
+input_eos_idx = data["input_char2idx"][SPECIAL_TOKENS["EOS"]]
+eos_idx = data["output_char2idx"][SPECIAL_TOKENS["EOS"]]
 inv_input_vocab = {v: k for k, v in input_vocab.items()}
 inv_output_vocab = {v: k for k, v in output_vocab.items()}
 model.eval()
 
-# ============================ #
-#   5. Inference & Viz        #
-# ============================ #
+
 correct_words, total_words = 0, 0
 total_correct_chars, total_chars = 0, 0
 predictions = []
@@ -48,10 +49,14 @@ with torch.no_grad():
         for i in range(src.size(0)):
             src_single = src[i].unsqueeze(0)
             tgt_single = tgt[i].unsqueeze(0)
+           
+            output = model.predict(src_single, max_len=30, beam_size=5)
+            if isinstance(output, list):  # beam search case
+                pred_seq, attn_weights, _ = output[0]
+            else:  # greedy decode
+                pred_seq, attn_weights, _ = output
 
-            pred_seq, best_attn_list, _ = model.predict(src_single, max_len=30, beam_size=5)
-
-            pred_indices = pred_seq.tolist()
+            pred_indices = pred_seq
             if eos_idx in pred_indices:
                 pred_indices = pred_indices[:pred_indices.index(eos_idx)]
             pred_str = ''.join([inv_output_vocab.get(idx, '?') for idx in pred_indices])
@@ -62,7 +67,9 @@ with torch.no_grad():
             tgt_str = ''.join([inv_output_vocab.get(idx, '?') for idx in tgt_indices])
 
             input_indices = src_single[0].tolist()
-            input_str = ''.join([inv_input_vocab.get(idx, '?') for idx in input_indices if idx not in [0, input_vocab['<EOS>']]])
+            
+            
+            input_str = ''.join([inv_input_vocab.get(idx, '?') for idx in input_indices if idx not in [0, input_eos_idx]])
 
             correct_word = pred_str == tgt_str
             correct_chars = sum(1 for p, t in zip(pred_str, tgt_str) if p == t)
@@ -82,9 +89,10 @@ with torch.no_grad():
             })
 
             if viz_count < viz_samples:
-                input_chars = [inv_input_vocab.get(idx, '?') for idx in input_indices if idx not in [0, input_vocab['<EOS>']]]
+                input_chars = [inv_input_vocab.get(idx, '?') for idx in input_indices if idx not in [0, input_eos_idx]]
+          
                 pred_chars = [inv_output_vocab.get(idx, '?') for idx in pred_indices]
-                attn_weights = [attn.cpu().numpy()[0] for attn in best_attn_list]
+                #attn_weights = [attn.cpu().numpy()[0] for attn in best_attn_list]
 
                 fig, axes = plt.subplots(len(pred_chars), 1, figsize=(max(6, 0.7 * len(input_chars)), 1.5 * len(pred_chars) + 1))
                 if len(pred_chars) == 1:
@@ -110,9 +118,7 @@ with torch.no_grad():
                 wandb.log({f"attent_@sample{viz_count}": wandb.Image(viz_path)})
                 viz_count += 1
 
-# ============================ #
-#   6. Combine All Images     #
-# ============================ #
+
 if viz_count > 0:
     grid_cols = 2
     grid_rows = (viz_count + grid_cols - 1) // grid_cols
@@ -133,18 +139,14 @@ if viz_count > 0:
     wandb.log({"attent_@_samples_combined": wandb.Image(combined_path)})
     print(f"Saved combined attention image: {combined_path}")
 
-# ============================ #
-#   7. Log Accuracy + Table   #
-# ============================ #
+
 word_accuracy = 100 * correct_words / total_words
 char_accuracy = 100 * total_correct_chars / total_chars
 wandb.log({"test_word_accuracy": word_accuracy, "test_char_accuracy": char_accuracy})
 print(f"\nWord Accuracy: {word_accuracy:.2f}%")
 print(f"Char Accuracy: {char_accuracy:.2f}%")
 
-# ============================ #
-#   8. Save Predictions       #
-# ============================ #
+
 df_predictions = pd.DataFrame(predictions)
 csv_path = 'predictions_attention/pred_attention.csv'
 html_plain_path = 'predictions_attention/predictions_all_plain_attention.html'
@@ -159,9 +161,12 @@ def highlight_row(row):
 sample_df = pd.DataFrame(predictions[:viz_count])
 
 styled_sample = sample_df.style.apply(highlight_row, axis=1)\
-    .set_table_styles([{'selector': 'th', 'props': [('text-align', 'center')]}])\
-    .set_properties({'text-align': 'left', 'padding': '8px', 'font-size': '14px', 'border': '1px solid #ccc'})\
-    .hide(axis='index')
+    .set_table_styles([
+        {"selector": "th", "props": [("font-size", "110%"), ("text-align", "center")]},
+        {"selector": "td", "props": [("text-align", "center")]}
+    ])\
+    .set_properties(**{'border': '1px solid black', 'padding': '5px'})
+
 
 with open(html_colored_path, 'w', encoding='utf-8') as f:
     f.write(f"<h3>Sample Predictions (Color-Coded)</h3>\n{styled_sample.to_html()}")
@@ -169,9 +174,7 @@ with open(html_colored_path, 'w', encoding='utf-8') as f:
 display(HTML("<h3>Sample Predictions (Color-Coded)</h3>"))
 display(styled_sample)
 
-# ============================ #
-#   9. Log Artifacts to W&B   #
-# ============================ #
+
 artifact = wandb.Artifact('predictions_attention', type='predictions')
 artifact.add_file(csv_path)
 artifact.add_file(html_plain_path)
