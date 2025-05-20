@@ -9,7 +9,7 @@ import os
 from tqdm import tqdm
 
 from data_preparation import load_data, SPECIAL_TOKENS
-from local_functions import seed_all, calculate_accuracy, save_best_model_attention_config
+from local_functions import seed_all, save_best_model_attention_config
 from models.attention_encoder import Encoder
 from models.attention import Attention
 from models.attention_decoder import AttentionDecoder
@@ -78,11 +78,9 @@ def train(config=None):
         optimizer = optim.Adam(model.parameters())
         criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
-        wandb.watch(model, log="gradients", log_freq=100)
 
         no_improve = 0
         patience = config.get("patience", 3)
-        
 
         for epoch in range(config.epochs):
             model.train()
@@ -106,10 +104,10 @@ def train(config=None):
 
                 # Optional: attention regularization
                 attn_entropy = -torch.sum(attentions * torch.log(attentions + 1e-8), dim=-1).mean()
-                loss += 0.01 * attn_entropy
+                loss += 0.001 * attn_entropy
 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5)
                 optimizer.step()
 
                 epoch_loss += loss.item()
@@ -125,13 +123,6 @@ def train(config=None):
 
             # Evaluate on validation set as usual
             model.eval()
-            # with torch.no_grad():
-            #     val_output, _ = model(x_val, y_val, teacher_forcing_ratio=0.0)
-            #     val_loss = criterion(
-            #         val_output[:, 1:].reshape(-1, output_dim),
-            #         y_val[:, 1:].reshape(-1)
-            #     )
-            #     val_acc = calculate_accuracy(val_output[:, 1:], y_val[:, 1:], pad_idx)
             with torch.no_grad():
                 # Get model predictions without teacher forcing
                 val_output, _ = model(x_val, y_val, teacher_forcing_ratio=0.0)
@@ -181,6 +172,6 @@ def train(config=None):
 if __name__ == "__main__":
     import sweep_config
     sweep_id = wandb.sweep(sweep_config.sweep_config_attention, project="DA6401_assign_3")
-    wandb.agent(sweep_id, function=train, count=1)
+    wandb.agent(sweep_id, function=train, count=30)
     wandb.finish()
     print("Sweep complete.")
