@@ -112,8 +112,8 @@ print(f"\nAttention fixed {len(corrected_by_attention)} mistakes made by vanilla
 print(f"Attention introduced {len(regressed_by_attention)} new errors.")
 
 # Save outputs
-os.makedirs("analysis", exist_ok=True)
-df.to_csv("analysis/model_comparison.tsv", sep="\t", index=False)
+os.makedirs("predictions_attention", exist_ok=True)
+df.to_csv("predictions_attention/model_comparison.tsv", sep="\t", index=False)
 
 def save_examples(examples, path, label):
     with open(path, "w", encoding="utf-8") as f:
@@ -122,10 +122,10 @@ def save_examples(examples, path, label):
             f.write(f"{inp}\t{tgt}\t{van}\t{att}\n")
     print(f"Saved {label} cases to {path}")
 
-save_examples(corrected_by_attention, "analysis/corrected_by_attention.tsv", "corrected")
-save_examples(regressed_by_attention, "analysis/regressed_by_attention.tsv", "regressed")
+save_examples(corrected_by_attention, "predictions_attention/corrected_by_attention.tsv", "corrected")
+save_examples(regressed_by_attention, "predictions_attention/error_over_vanilla_by_attention.tsv", "regressed")
 
-print("\nAnalysis complete and saved in 'analysis/' folder.")
+print("\nAnalysis complete and saved in 'predictions_attention/' folder.")
 
 
 # -------------------
