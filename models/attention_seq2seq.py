@@ -17,11 +17,11 @@ class Seq2Seq(nn.Module):
             if h.size(0) == target_layers:
                 return h
             elif h.size(0) < target_layers:
-                repeat = target_layers - h.size(0)
-                return torch.cat([h] + [h[-1:]] * repeat, dim=0)
+                pad = torch.zeros(target_layers - h.size(0), *h.shape[1:], device=h.device)
+                return torch.cat([h, pad], dim=0)
             else:
                 return h[:target_layers]
-
+    
         if self.rnn_type == 'lstm':
             h_n, c_n = hidden
             h_n = pad_or_trim(h_n, self.decoder.rnn.num_layers)
@@ -32,7 +32,7 @@ class Seq2Seq(nn.Module):
             h_n = pad_or_trim(h_n, self.decoder.rnn.num_layers)
             return h_n
 
-    def forward(self, src, trg=None, teacher_forcing_ratio=0.5):
+    def forward(self, src, trg, teacher_forcing_ratio=0.5):
         batch_size = src.size(0)
         trg_len = trg.size(1)
         output_dim = self.decoder.output_dim

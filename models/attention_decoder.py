@@ -2,8 +2,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from models.attention import Attention
 
 class AttentionDecoder(nn.Module):
     def __init__(self, output_dim, emb_dim, hidden_dim, n_layers, cell_type, dropout, attention):
