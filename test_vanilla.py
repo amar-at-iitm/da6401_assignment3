@@ -1,7 +1,8 @@
 # test_vanilla.py
 import os
-# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
+import wandb  
+
 from data_preparation import load_data
 from local_functions import idx_to_string, SPECIAL_TOKENS
 from models.encoder import Encoder
@@ -19,10 +20,12 @@ BEST_CONFIG = {
     "dropout": DROPOUT,
     "rnn_type": RNN_TYPE, 
 }
+
 def clean_string(s):
     for tok in SPECIAL_TOKENS.values():
         s = s.replace(tok, "")
     return s
+
 def load_best_model():
     data = load_data()
     input_dim = len(data["input_char2idx"])
@@ -55,6 +58,8 @@ def load_best_model():
     return model, data
 
 def test_model():
+    wandb.init(project="vanilla-seq2seq", name="vanilla-test")  # <<< WandB init
+
     model, data = load_best_model()
     x_test, y_test = data["x_test"].to(DEVICE), data["y_test"].to(DEVICE)
 
@@ -74,8 +79,9 @@ def test_model():
         correct_preds = (val_pred_flat.argmax(1)[mask] == val_target_flat[mask]).sum().item()
         total_tokens = mask.sum().item()
         val_acc = correct_preds / total_tokens if total_tokens > 0 else 0.0
- 
+
         print(f"Character-Level Test Accuracy: {val_acc:.4f}")
+        wandb.log({"char_level_accuracy": val_acc})  
 
         # Character-wise Accuracy
         os.makedirs("predictions_vanilla", exist_ok=True)
@@ -90,6 +96,7 @@ def test_model():
                 f_out.write(f"{input_str}\t{target_str}\t{pred_str}\n")
 
         print(f"Saved character-wise predictions to: {predictions_path}")
+
     # Exact Match Accuracy 
     exact_matches = 0
     all_outputs = []
@@ -105,21 +112,28 @@ def test_model():
 
     exact_accuracy_raw = exact_matches / x_test.size(0)
 
-    # Save predictions to file
+    # Saving predictions to file
     os.makedirs("predictions_vanilla", exist_ok=True)
-    with open("predictions_vanilla/predictions.tsv", "w", encoding="utf-8") as f:
+    with open("predictions_vanilla/all_predictions.tsv", "w", encoding="utf-8") as f:
         f.write("Input\tTarget\tPredicted\n")
         for inp, tgt, pred in all_outputs:
             f.write(f"{inp}\t{tgt}\t{pred}\n")
 
-    # Save accuracy
+    
     with open("predictions_vanilla/accuracy.txt", "w") as f:
         f.write(f"Character-Level Accuracy: {val_acc:.4f}\n")
         f.write(f"Exact Match Accuracy : {exact_accuracy_raw:.4f}\n")
 
-    # Print results
+    # WandB logging
+    wandb.log({
+        "exact_match_accuracy": exact_accuracy_raw
+    })  
+
+  
     print(f"Total Words in Test: {x_test.size(0)}")
     print(f"Exact Match Accuracy:     {exact_accuracy_raw:.4f}")
+
+    wandb.finish()  
 
 if __name__ == "__main__":
     test_model()
