@@ -177,3 +177,7 @@ cython_debug/
 # folders 
 data/
 wandb/
+
+#files 
+.png
+.txt
