@@ -79,7 +79,7 @@ def idx_to_string(indices, idx2char):
             break
         if char not in [SPECIAL_TOKENS["PAD"], SPECIAL_TOKENS["SOS"]]:
             chars.append(char)
-    return "".join(chars)/
+    return "".join(chars)
 
 #/////////////////////////////////////////////////////////////////////
 def save_best_model_config(config, model_path="best_model.pt", output_path="best_model.py"):
